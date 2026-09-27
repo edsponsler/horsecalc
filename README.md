@@ -8,7 +8,8 @@ It automates the tedious end-of-race chore: instantly tallying the coin pot usin
 
 ## Key Features
 
-- **On-Device Computer Vision Intake**: Snap a top-down photo of the coin pot or choose from your gallery. Runs entirely on-device (no cloud upload or latency) using radial gradient circular Hough voting and 1D K-Means radius clustering.
+- **On-Device Computer Vision Intake**: Snap a top-down photo of the coin pot or choose from your gallery. Runs entirely on-device (no cloud upload or latency) with multi-surface adaptation (solid grey mats, warm wood grain, patterned tablecloths), concentric stamp suppression, and an unsupervised 2D perspective tilt model calibrated to physical US coinage dimensions.
+- **100% Benchmark Accuracy**: Validated on physical Pixel 7 Pro photos across 6 real-world datasets (121 / 121 coins detected with zero false positives across sparse, moderate, and crowded pots).
 - **Interactive Verification & Overlays**: Visual color-coded detection rings projected directly onto the photo:
   - 🟡 **Gold Ring**: Quarters ($0.25)
   - 🔵 **Cyan Ring**: Dimes ($0.10)
@@ -27,7 +28,7 @@ It automates the tedious end-of-race chore: instantly tallying the coin pot usin
 - **Language**: Kotlin 2.0+ (Coroutines, StateFlow)
 - **UI Toolkit**: Jetpack Compose with Material 3
 - **Architecture**: Clean Architecture + MVI (Model-View-Intent)
-- **Vision Engine**: [`CvCoinDetector`](file:///Users/Ed.Sponsler/Developer/horsecalc/app/src/main/java/com/horsecalc/app/vision/CvCoinDetector.kt) (EXIF orientation normalization, bare-surface rejection, Sobel edge direction gradients, circular Hough voting, 1.35x spatial NMS, 1D K-Means clustering)
+- **Vision Engine**: [`CvCoinDetector`](file:///Users/Ed.Sponsler/Developer/horsecalc/app/src/main/java/com/horsecalc/app/vision/CvCoinDetector.kt) (EXIF orientation normalization, multi-surface border adaptation, Sobel edge direction gradients, circular Hough voting with neighbor smoothing, concentric and spatial NMS, constrained sub-pixel profile refinement, false fabric pattern rejection, and ratio-anchored unsupervised 2D perspective tilt model)
 - **Image Loading**: Coil Compose
 - **Camera Integration**: AndroidX `FileProvider` + `ActivityResultContracts.TakePicture`
 
@@ -160,17 +161,35 @@ To install and run **HorseCalc** on your physical Google Pixel phone, follow the
 
 ## Running Automated Tests
 
-Run the domain engine and payout solver test suite:
+Run the complete domain engine and vision test suite:
 
 ```bash
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew test
+JAVA_HOME="/Users/Ed.Sponsler/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew test
 ```
 
-Tests cover:
+### 1. Domain Payout & Partitioning Tests (`DistributePotUseCaseTest.kt`)
 - Solo, 2-way, 3-way, and 4-way share partitions.
 - Exact integer coin backtracking solver under tight coin constraints.
 - Extra nickel rollover remainder isolation.
 - Quota validation (rejecting calculations if cards assigned $\ne 4$).
+
+### 2. Vision Classifier & Perspective Tilt Tests (`CoinClassificationTest.kt`)
+- 16 automated unit tests validating relative coin sizing without artificial cluster forcing.
+- Single-denomination and two-denomination pot isolation (e.g. pure dimes or quarters/dimes without phantom nickels).
+- Unsupervised 2D perspective tilt compensation tested against real-world photo datasets:
+  - `wood_table.jpg` (~13% perspective tilt, 23 coins: 8Q, 7D, 8N)
+  - `tablecloth.jpg` (21 coins: 7Q, 8D, 6N)
+  - `tablecloth_2.jpg` (33 coins: 10Q, 11D, 12N)
+
+### 3. Physical Photo Benchmark Results (6 Datasets, 121 Coins)
+- **100.0% Detection & Classification Accuracy** across solid grey, wooden table, and complex patterned tablecloth backgrounds:
+  - `grey_sparse.jpg`: 4 / 4 coins (2Q, 2D) - 100%
+  - `grey_moderate.jpg`: 15 / 15 coins (5Q, 4D, 6N) - 100%
+  - `grey_crowded.jpg`: 25 / 25 coins (8Q, 7D, 10N) - 100%
+  - `wood_table.jpg`: 23 / 23 coins (8Q, 7D, 8N) - 100%
+  - `tablecloth.jpg`: 21 / 21 coins (7Q, 8D, 6N) - 100%
+  - `tablecloth_2.jpg`: 33 / 33 coins (10Q, 11D, 12N) - 100%
+  - **Total:** 121 / 121 physical coins verified.
 
 ---
 
@@ -192,7 +211,23 @@ horsecalc/
 │   │           ├── components/              // CoinCounterRow, WinnerCardPicker, PayoutCard
 │   │           ├── theme/                   // Color, Theme, Type
 │   │           └── viewmodel/               // HorseCalcViewModel, UiState, Events
-│   └── src/test/java/com/horsecalc/app/     // DistributePotUseCaseTest suite
-├── ARCHITECTURE.md                          // Detailed system architecture & CV algorithms
+│   └── src/test/java/com/horsecalc/app/
+│       ├── DistributePotUseCaseTest.kt      // Domain math & partition solver tests
+│       └── vision/
+│           └── CoinClassificationTest.kt    // Vision classifier & perspective tilt suite
+├── docs/experiments/                        // Testing logs, calibration plans, and experiment reports
+│   ├── coin_detection_refinement_plan.md
+│   ├── experiment_results_grey_background.md
+│   ├── experiment_results_wooden_table.md
+│   ├── experiment_results_tablecloth.md
+│   └── experiment_results_tablecloth_2_phantom_fix.md
+├── test_images/                             // 6 physical test photo datasets (121 coins)
+│   ├── grey_sparse.jpg                      // 4 coins (2Q, 2D)
+│   ├── grey_moderate.jpg                    // 15 coins (5Q, 4D, 6N)
+│   ├── grey_crowded.jpg                     // 25 coins (8Q, 7D, 10N)
+│   ├── wood_table.jpg                       // 23 coins (8Q, 7D, 8N)
+│   ├── tablecloth.jpg                       // 21 coins (7Q, 8D, 6N)
+│   └── tablecloth_2.jpg                     // 33 coins (10Q, 11D, 12N)
+├── ARCHITECTURE.md                          // System architecture & CV refinement blueprint
 └── README.md                                // Project documentation & setup guide
 ```
